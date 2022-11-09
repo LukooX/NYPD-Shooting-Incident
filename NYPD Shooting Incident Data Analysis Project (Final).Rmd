@@ -1,0 +1,89 @@
+---
+title: "NYPD Shooting Incident Report"
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-10-04"
+---
+
+This is an data analysis report based on shooting incident that happens in New York between 2006 and 2021, the data set is provided by NYPD. This report is focus on the incident happening time for individuals to be aware of the most risky time period.
+
+## Step 0 Loading the data 
+```{r message = FALSE}
+library(tidyverse)
+library(lubridate)
+library(stringr)
+NYPD <- read_csv("https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD")
+
+```
+
+## Step 1 Tidying and Transforming data
+This step is for eliminating those columns which are not required for my analysis and adding columns for weekdays for analysis purpose. Also, the age value which is not reasonable is now replaced as "NA"
+```{r}
+NYPD_tidy <- NYPD %>% select(-c(X_COORD_CD,Y_COORD_CD,Latitude,Longitude,Lon_Lat,INCIDENT_KEY,JURISDICTION_CODE,PRECINCT)) %>% 
+  mutate(WEEKDAY = wday( mdy(OCCUR_DATE), week_start = 1)) %>% 
+  select(OCCUR_DATE,WEEKDAY,OCCUR_TIME,everything()) %>% 
+  mutate(PERP_AGE_GROUP =replace(PERP_AGE_GROUP,PERP_AGE_GROUP == "1020","NA")) %>%
+  mutate(PERP_AGE_GROUP =replace(PERP_AGE_GROUP,PERP_AGE_GROUP == "940","NA")) %>%
+  mutate(PERP_AGE_GROUP =replace(PERP_AGE_GROUP,PERP_AGE_GROUP == "224","NA")) %>% 
+  mutate(PERP_AGE_GROUP =replace(PERP_AGE_GROUP,PERP_AGE_GROUP == "UNKNOWN","NA"))
+head(NYPD_tidy) 
+```
+
+## Step 2 Data Visualization and analysis
+
+### 1. Incident happening time analysis.
+
+```{r}
+NYPD_tidy %>% ggplot(aes(x=OCCUR_TIME))+geom_freqpoly(binwidth = 400)+
+  labs(title = "Incident happening frequency by hours", x = "Occur Time", y = "Count of Incident")+
+  theme_minimal()
+```
+```{r}
+NYPD_tidy %>% ggplot(aes(x=WEEKDAY),margin (t = 0, r = 0, b = 0, l = 0, unit = "pt"))+
+  geom_bar()+
+  labs(title = "Incident happening frequencies by weekdays" , x = "Weekdays" , y = "Count of Incident")+
+  theme_minimal()
+```
+
+It can be observed that, the incidents peak hour is between 23:00 to 24:00 in a day time and lowest at 7:00 - 8:00. Also, weekends have higher incidents rate compared to weekdays.
+
+
+### 2. Victim Analysis
+
+```{r}
+NYPD %>% ggplot(aes(x=VIC_AGE_GROUP))+
+  geom_bar()+
+  theme_minimal()+
+  labs(title="Victime age group", x = "Victim ages", y = "Count of Victims")
+```
+
+```{r}
+NYPD_tidy %>% ggplot(aes(x=VIC_SEX))+
+  geom_bar()+
+  theme_minimal()+
+  labs(title = "Victim sex", x = "Victim Sex" , y = "Count of Victims" )
+```
+The Victims are mainly males in age group 25-44, followed by age group 18-24.
+
+### 3. Perpetrator analysis
+
+```{r}
+NYPD_tidy %>% ggplot(aes(x=PERP_AGE_GROUP))+
+  geom_bar()+
+  theme_minimal()+
+  labs(title = "Perpetrator age group", x = "Perpetrator age group", y = "Count of perpetrator")
+```
+Majority of the perpetrators are males. But unlike the victims, the top age group is now ages 18-24, followed by ages 25-44 
+
+
+## Step 3 Modelling Data
+We are using logistic regression to get a qualitative response (whether it is a murder or not). Based on the p-value in the summary below, the perpetrator and victim ages groups are statistical significant. 
+```{r}
+glm<- glm(STATISTICAL_MURDER_FLAG ~ PERP_RACE + PERP_SEX + PERP_AGE_GROUP + WEEKDAY + OCCUR_TIME + VIC_RACE +VIC_SEX +VIC_AGE_GROUP, data = NYPD_tidy, family = binomial)
+summary(glm)
+```
+
+## Step 4 Bias
+For perpetrator analysis section, since there are a lot of open cases, so the data set is not complete, the conclusion we draw from the data may not be accurate. (eg. A particular age group may be more likely to escape from the police )
+
